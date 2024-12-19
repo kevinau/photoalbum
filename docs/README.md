@@ -13,3 +13,5 @@ This page will be updated as progress is made.
 
 Some proof of concept work has aleady been done regarding face detection and face recognition.  This will be 
 incorporated into the web page code.
+
+See a description of the [basic design](./index.html).
