@@ -14,7 +14,8 @@ The search expression can include:
 
 Groups of the above can also be specified and searched on.
 
-Having textual searches allows for RESTful searches.
+Having textual searches allows for URL based searches.  See [search expression](/photoalbum/assets/search-expression.md) for an
+explanation of how search expressions are put together.
 
 ## Main page
 
