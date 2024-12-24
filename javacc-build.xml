@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+
+<project default="javacc" name="Create expression parser">
+
+  <property name="package.dir" value="au/geckosoftware/photoalbum/search/parser" />
+  
+  <target name="javacc">
+    <mkdir dir="src/${package.dir}" />
+    <javacc
+      target="searchExpressionParser.jj"
+      outputdirectory="src/${package.dir}"
+      javacchome="${user.home}/Java/code/3rd-party/javacc-javacc-7.0.12/bootstrap"
+    />
+  </target>
+</project>

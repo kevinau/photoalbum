@@ -1,0 +1,659 @@
+options {
+  LOOKAHEAD = 1;
+  //CHOICE_AMBIGUITY_CHECK = 2;
+  //OTHER_AMBIGUITY_CHECK = 1;
+  STATIC = false;
+  //DEBUG_PARSER = true;
+  //DEBUG_LOOKAHEAD = true;
+  //DEBUG_TOKEN_MANAGER = false;
+  //ERROR_REPORTING = true;
+  JAVA_UNICODE_ESCAPE = true;
+  //UNICODE_INPUT = false;
+  IGNORE_CASE = true;
+  //USER_TOKEN_MANAGER = false;
+  //USER_CHAR_STREAM = false;
+  //BUILD_PARSER = true;
+  //BUILD_TOKEN_MANAGER = true;
+  //SANITY_CHECK = true;
+  //FORCE_LA_CHECK = false;
+  //
+}
+
+
+
+PARSER_BEGIN(JointConstraintParser)
+package au.geckosoftware.leadlight.m.design.constraint.parser;
+
+import java.io.StringReader;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
+import javax.inject.Singleton;
+
+import javafx.beans.binding.Bindings;
+import javafx.beans.property.DoubleProperty;
+import javafx.beans.property.SimpleDoubleProperty;
+import javafx.beans.value.ObservableNumberValue;
+
+import au.geckosoftware.leadlight.m.design.DesignProperties;
+import au.geckosoftware.leadlight.m.design.IConstraintExtent;
+import au.geckosoftware.leadlight.m.design.ICoordinateValue;
+import au.geckosoftware.leadlight.m.design.Joint;
+import au.geckosoftware.leadlight.m.design.JointConstraintParserResult;
+import au.geckosoftware.leadlight.m.design.ModelLine;
+import au.geckosoftware.leadlight.m.design.CameLine;
+import au.geckosoftware.leadlight.m.design.constraint.CartesianAddValue;
+import au.geckosoftware.leadlight.m.design.constraint.CartesianSubtractValue;
+import au.geckosoftware.leadlight.m.design.constraint.CoordinateValue;
+import au.geckosoftware.leadlight.m.design.constraint.LineValue;
+import au.geckosoftware.leadlight.m.design.constraint.OffsetValue;
+import au.geckosoftware.leadlight.m.design.constraint.OnLineValue;
+import au.geckosoftware.leadlight.m.design.constraint.OnLineXValue;
+import au.geckosoftware.leadlight.m.design.constraint.OnLineYValue;
+import au.geckosoftware.leadlight.m.design.constraint.OriginAngle;
+import au.geckosoftware.leadlight.m.design.constraint.OriginAngleValue;
+import au.geckosoftware.leadlight.m.design.constraint.OriginRadius;
+import au.geckosoftware.leadlight.m.design.constraint.PolarValue;
+import au.geckosoftware.leadlight.m.design.constraint.ReferencedJointValue;
+import au.geckosoftware.u.UnsupportedValueException;  
+
+
+@Singleton
+@SuppressWarnings("unused")
+public class JointConstraintParser {
+  
+  private Joint target;
+  private IConstraintExtent constraintExtent;
+
+  private Set<String> referenced = new HashSet<String>();
+  private Set<String> missing = new HashSet<String>();
+  private Map<String, ReferencedJointValue> referencedJointValues = new HashMap<String, ReferencedJointValue>();
+  
+  
+  private static class NullInputStream extends java.io.InputStream {
+    @Override
+    public int read() {
+      return 0;
+    }
+  }
+    
+  
+  public JointConstraintParser (
+          IConstraintExtent constraintExtent)
+  {
+    this(new NullInputStream());
+    this.constraintExtent = constraintExtent;
+  }
+
+
+  public JointConstraintParserResult parseExpression(String s, Joint target) {
+    this.target = target;
+    
+    StringReader reader = new StringReader(s);
+    ReInit(reader);
+    missing.clear();
+    referenced.clear();
+    referencedJointValues.clear();
+
+    try {
+      ICoordinateValue cv;
+      if (target.isOnLine()) {
+        cv = OffsetExpression();
+      } else {
+        cv = CoordExpression();
+      }
+      return new JointConstraintParserResult(s, null, cv, referenced, missing);
+    } catch (TokenMgrError e) {
+      return new JointConstraintParserResult(s, e.getMessage());
+    } catch (ParseException ex) {
+      return new JointConstraintParserResult(s, ex.getMessage());
+    }
+  }
+
+
+  private Joint getKnownJoint (String key) throws ParseException {
+    Joint j = queryKnownJoint(key);
+    if (j != null) {
+      return j;
+    } else {
+      // Return a dummy joint.  This joint is only used to allow the parser
+      // to continue.  It is not included in the result of this parse.
+      return new Joint(key);
+    }
+  }
+  
+  
+  private Joint queryKnownJoint (String key) throws ParseException {
+    Joint j = constraintExtent.getJoint(key);
+    if (j != null) {
+      referenced.add(key);
+      getReferencedJoint(j);
+      return j;
+    } else {
+      referenced.add(key);
+      missing.add(key);
+      return null;
+    }
+  }
+  
+  
+  private ReferencedJointValue getReferencedJoint (Joint j) {
+   	ReferencedJointValue ref = referencedJointValues.get(j.getJointId());
+    if (ref == null) {
+      ref = new ReferencedJointValue(j); 
+      referencedJointValues.put(j.getJointId(), ref);
+    }
+    return ref;
+  }
+  
+}
+
+
+PARSER_END(JointConstraintParser)
+
+
+/* WHITE SPACE */
+
+SKIP :
+{
+  " "
+| "\t"
+| "\n"
+| "\r"
+| "\f"
+}
+
+TOKEN :
+{
+  < SIZE: "size" >
+}
+
+/* LITERALS */
+
+TOKEN :
+{
+  < NUMBER_LITERAL: <NUMBER> >
+|
+  < DEGREE_LITERAL: <NUMBER> "'" >
+|
+  < #POSITIVE_INTEGER: ("0" | (["1"-"9"] (["0"-"9"])* )) >
+|
+  < #NUMBER: <POSITIVE_INTEGER> ("." (["0"-"9"])* )? >
+}
+
+/* IDENTIFIERS */
+
+TOKEN :
+{
+  < WIDTH: "width" >
+|
+  < HEIGHT: "height" >
+|
+  < JOINT_NAME: "j" (<LETTER_OR_NUMBER>)* >
+|  
+  < #LETTER: ["a"-"z"] >
+|
+  < #LETTER_OR_NUMBER: ["a"-"z","0"-"9"] >
+|
+  < COORD_FIELD_NAME: <X_FIELD> | <Y_FIELD> | <OFFSET_FIELD> >
+|
+  < #X_FIELD: "." "x" >
+|
+  < #Y_FIELD: "." "y" >
+|
+  < #OFFSET_FIELD: "." "o" >
+|
+  < DEGREE_TAG: "'" >
+|
+  < LENGTH_TAG: "~" >
+}
+
+
+/* SEPARATORS */
+
+TOKEN :
+{
+  < LPAREN: "(" >
+| < RPAREN: ")" >
+| < COMMA: "," >
+| < DOT: "." >
+| < PERCENT: "%" >
+}
+
+/* OPERATORS */
+
+TOKEN :
+{
+  < PLUS: "+" >
+| < MINUS: "-" >
+| < STAR: "*" >
+| < SLASH: "/" >
+}
+
+
+ICoordinateValue CoordExpression() :
+{
+  ObservableNumberValue v1;
+  ObservableNumberValue d;
+  ObservableNumberValue v2;
+  ICoordinateValue v;
+  OriginAngle a1;
+  OriginAngle a2;
+  OriginRadius r1;
+  OriginRadius r2;
+}
+{
+  (
+   	<EOF> 
+   		{ return new CoordinateValue(null, null); }
+  |
+    LOOKAHEAD(3)
+    v1=NumberExpression(0)
+    	(
+    	  <EOF>
+		     	{ // A single expression results in a constraint for x, but no constraint for y
+		     	  return new CoordinateValue(v1, null); }
+    	|
+    	   "," v2=NumberExpression(1) <EOF>
+		     	{ // Two expressions, separated by a comma, results in a constraint for both x and y.
+		     	  return new CoordinateValue(v1, v2);	}
+    	)
+  |
+    "," v2=NumberExpression(1) <EOF>
+     	{ // A comma, followed by a single expression results in a constraint for y,
+     	  return new CoordinateValue(null, v2); }
+  |
+    LOOKAHEAD(3)
+    a1=OriginAngleExpression() 
+      ( 
+          <EOF>
+     	 		{ return new OriginAngleValue(a1, null, null); }
+	    |
+    	  "," v2=NumberExpression(1) <EOF>
+   	    	{ return new PolarValue(a1, v2); }
+     	)
+
+//  |
+//    v=AdditiveCoordExpression() <EOF>
+//    	{
+//    	  return v; 
+//		  }
+  )
+}
+  
+  
+ICoordinateValue OffsetExpression() :
+{
+  ObservableNumberValue v = null;
+  ObservableNumberValue v0 = null;
+  ObservableNumberValue v1 = null;
+  CameLine throughLine = null;
+}
+{
+  ( 
+   	<EOF> 
+   		{ return new OnLineValue(target); }
+  |
+    v=NumberExpression(0) <EOF>
+        { 
+          if (v.doubleValue() >= 0.0 && v.doubleValue() <= 1.0) {
+            throughLine = target.getThroughLine();
+            getReferencedJoint(throughLine.getStartJoint());
+            getReferencedJoint(throughLine.getEndJoint());
+            return new OffsetValue(target, v); 
+          } else {
+            return new OnLineXValue(target, v);
+          } 
+        }
+  | LOOKAHEAD(2) 
+    "," v=NumberExpression(1) <EOF>
+        { 
+          return new OnLineYValue(target, v); 
+        }
+  |
+    "," "," v=NumberExpression(2) <EOF>
+        { 
+          throughLine = target.getThroughLine();
+          getReferencedJoint(throughLine.getStartJoint());
+          getReferencedJoint(throughLine.getEndJoint());
+          return new OffsetValue(target, v); 
+        }
+  )
+}
+
+
+ICoordinateValue AdditiveCoordExpression() :
+{
+  ICoordinateValue t;
+  ICoordinateValue t2;
+  ObservableNumberValue v;
+}
+{
+  t=CoordTerm() 
+  (
+	<PLUS> 
+    t2=CoordTerm() 
+	  	{ t = new CartesianAddValue(t, t2); }
+  |
+	<MINUS> 
+    t2=CoordTerm() 
+	  	{ t = new CartesianSubtractValue(t, t2); }
+  )*
+		{ return t; }
+}
+
+
+ICoordinateValue CoordTerm() :
+{
+  Joint j;
+  ObservableNumberValue v1;
+  ObservableNumberValue d;
+  ObservableNumberValue v2;
+  ICoordinateValue v;
+}
+{
+  (
+    j=JointExpression() 
+    	{ return getReferencedJoint(j); }
+  |
+    LOOKAHEAD(3)
+    "[" v1=NumberExpression(0) "," v2=NumberExpression(1) "]"
+     	{ return new CoordinateValue(v1, v2); }
+  |
+    LOOKAHEAD(3)
+    "[" d=AngleExpression() "," v2=NumberExpression(3) "]"
+    	{ return new PolarValue(d, v2); }
+  |
+    LOOKAHEAD(3)
+  	"(" v=AdditiveCoordExpression() ")"
+  		{ return v; }
+  )
+}
+  
+
+ObservableNumberValue NumberExpression(int index) :
+{
+  ObservableNumberValue v;
+  ObservableNumberValue v2;
+}
+{
+  v=MultNumberExpression(index) 
+  (
+    <PLUS> v2=MultNumberExpression(index)
+    	{
+    		v = (ObservableNumberValue)Bindings.add(v, v2);
+        }
+  |
+    <MINUS> v2=MultNumberExpression(index)
+    	{
+    		v = (ObservableNumberValue)Bindings.subtract(v, v2);
+        }
+  )*
+  		{ return v; }
+}
+
+
+ObservableNumberValue MultNumberExpression(int index) :
+{
+  ObservableNumberValue v;
+  ObservableNumberValue v2;
+}
+{
+  v=NumberTerm(index) 
+  ( 
+    "*" v2=NumberTerm(index) 
+    	{
+    		v = (ObservableNumberValue)Bindings.multiply(v, v2);
+    	}
+  |
+    "/" v2=NumberTerm(index)
+    	{
+    		v = (ObservableNumberValue)Bindings.divide(v, v2);
+    	}
+  )*
+  		{ return v; }
+}
+
+
+ObservableNumberValue NumberTerm(int index) :
+{
+  ObservableNumberValue v;
+  Joint j;
+  LineValue jj;
+  Token t = null;
+}
+{
+  (
+    v=SpecialValue()
+  |
+    v=NumberLiteral()
+  |
+    LOOKAHEAD(2)
+    j=JointExpression() ( t=<COORD_FIELD_NAME> )?
+        {
+          if (t == null) {
+            switch (index) {
+            case 0 :
+              v = j.xValueProperty();
+              break;
+            case 1 :
+              v = j.yValueProperty();
+              break;
+            case 2 :
+              v = j.offsetProperty();
+              break;
+            default :
+              throw new UnsupportedValueException(Integer.toString(index));
+            }
+          } else {
+            switch (t.image) {
+            case ".x" :
+              v = j.xValueProperty();
+              break;
+            case ".y" :
+              v = j.yValueProperty();
+              break;
+            case ".o" :
+              v = j.offsetProperty();
+              break;
+            default :
+              throw new UnsupportedValueException(Integer.toString(index));
+            }
+          }
+        }
+  |
+    jj=LineExpression() <LENGTH_TAG>
+        { v = null; }
+  |
+    "(" v=NumberExpression(index) ")" 
+  )
+  		{ return v; }
+}
+
+
+OriginAngle OriginAngleExpression() :
+{
+  ObservableNumberValue v;
+  Joint j;
+}
+{
+  j=JointExpression() "@"
+  v=AngleExpression()
+  		{ return new OriginAngle(j, v); }
+}
+
+		
+ObservableNumberValue AngleExpression() :
+{
+  ObservableNumberValue v;
+  ObservableNumberValue v2;
+}
+{
+  v=MultAngleExpression() 
+  (
+    <PLUS> v2=MultAngleExpression()
+    	{
+    		v = (ObservableNumberValue)Bindings.add(v, v2);
+        }
+  |
+    <MINUS> v2=MultAngleExpression()
+    	{
+    		v = (ObservableNumberValue)Bindings.subtract(v, v2);
+        }
+  )*
+  		{ return v; }
+}
+
+
+ObservableNumberValue MultAngleExpression() :
+{
+  ObservableNumberValue v;
+  ObservableNumberValue v2;
+}
+{
+  v=DegreeTerm() 
+  ( 
+    "*" v2=NumberTerm(-1) 
+    	{
+    		v = (ObservableNumberValue)Bindings.multiply(v, v2);
+    	}
+  |
+    "/" v2=NumberTerm(-1)
+    	{
+    		v = (ObservableNumberValue)Bindings.divide(v, v2);
+    	}
+  )*
+  		{ return v; }
+}
+
+
+ObservableNumberValue DegreeTerm() :
+{
+  ObservableNumberValue v;
+  LineValue jj;
+}
+{
+  (
+    v=DegreeLiteral()
+  |
+    "(" v=AngleExpression() ")" 
+  )
+  		{ return v; }
+}
+
+
+ObservableNumberValue DegreeLiteral() :
+{
+  Token t;
+}
+{
+  t=<DEGREE_LITERAL>
+  	{ 
+  	  String s = t.image.substring(0, t.image.length() - 1); 
+  	  return new SimpleDoubleProperty(Double.parseDouble(s)); 
+  	}
+}
+
+
+OriginRadius OriginRadiusExpression() :
+{
+  ObservableNumberValue v;
+  Joint j;
+}
+{
+  j=JointExpression() <LENGTH_TAG>
+  v=NumberExpression(-1)
+  		{ return new OriginRadius(j, v); }
+}
+
+
+ObservableNumberValue NumberLiteral() :
+{
+  Token t;
+  double value = 0.0;
+}
+{
+  (
+    t=<NUMBER_LITERAL>
+      { value = Double.parseDouble(t.image); }
+    (
+      <PERCENT>
+      { value = value / 100; }
+    )?
+  	  { return new SimpleDoubleProperty(value); }
+  )
+}
+
+
+ObservableNumberValue SpecialValue() :
+{
+  Token t;
+  DoubleProperty value;
+}
+{
+  ( t=<WIDTH> | t=<HEIGHT> )
+      { value = constraintExtent.specialValues().get(t.image);
+        if (value == null) {
+          throw new ParseException("Unknown special value: " + t.image);
+        }
+        return value;
+      }
+}
+
+
+Joint JointExpression() :
+{
+  Joint j;
+  Token t;
+}
+{
+  t=<JOINT_NAME>
+  	{ 
+  	  return getKnownJoint(t.image);
+  	}
+}
+
+
+LineValue LineExpression() :
+{
+  Joint j1;
+  Joint j2;
+  Token t1;
+  Token t2;
+}
+{
+  t1=<JOINT_NAME> t2=<JOINT_NAME> 
+    {
+      j1 = getKnownJoint(t1.image);
+      j2 = getKnownJoint(t2.image);
+      return new LineValue(j1, j2);
+    }
+}
+
+
+List<LineValue> LineListExpression() :
+{
+  List<LineValue> list = null;
+  LineValue v;
+}
+{
+  ( 
+    v = LineExpression()
+      {   
+        list = new ArrayList<LineValue>();
+        list.add(v); 
+      }
+    
+    ( <COMMA> v = LineExpression()
+      {
+        list.add(v); 
+      }
+    )*
+  )?
+    { return list; }
+}
+

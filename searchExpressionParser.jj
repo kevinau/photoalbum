@@ -1,0 +1,156 @@
+options {
+  LOOKAHEAD = 1;
+  //CHOICE_AMBIGUITY_CHECK = 2;
+  //OTHER_AMBIGUITY_CHECK = 1;
+  STATIC = false;
+  //DEBUG_PARSER = true;
+  //DEBUG_LOOKAHEAD = true;
+  //DEBUG_TOKEN_MANAGER = false;
+  //ERROR_REPORTING = true;
+  //JAVA_UNICODE_ESCAPE = false;
+  UNICODE_INPUT = true;
+  //IGNORE_CASE = false;
+  //USER_TOKEN_MANAGER = false;
+  //USER_CHAR_STREAM = false;
+  //BUILD_PARSER = true;
+  //BUILD_TOKEN_MANAGER = true;
+  //SANITY_CHECK = true;
+  //FORCE_LA_CHECK = false;
+  //
+}
+
+
+PARSER_BEGIN(SearchExpressionParser)
+package au.geckosoftware.photoalbum.search.parser;
+
+import java.io.StringReader;
+import au.geckosoftware.photoalbum.search.ExpressionException;
+import au.geckosoftware.photoalbum.search.NameList;
+import au.geckosoftware.photoalbum.search.NameList.Conjunction;
+ 
+
+@SuppressWarnings("unused")
+public class SearchExpressionParser {  
+  
+  private static class NullInputStream extends java.io.InputStream {
+    @Override
+    public int read() {
+      return 0;
+    }
+  }
+    
+  
+  public SearchExpressionParser ()
+  {
+    this(new NullInputStream());
+  }
+
+
+  public NameList parseExpression(String s) throws ExpressionException {
+    StringReader reader = new StringReader(s);
+    ReInit(reader);
+
+    try {
+      return ParseExpression(); 
+    } catch (TokenMgrError e) {
+      throw new ExpressionException(e.getMessage());
+    } catch (ParseException ex) {
+      throw new ExpressionException(ex.getMessage());
+    }
+  }
+  
+}
+
+
+PARSER_END(SearchExpressionParser)
+
+/* Logical operators.  The and/or/excluding must precede special token */
+
+TOKEN :
+{
+  < AND: "and" >
+|
+  < OR: "or" >
+|
+  < LPAREN: "(" >
+| 
+  < RPAREN: ")" >
+}
+
+
+/* Special token */
+TOKEN : 
+{
+  < NAME_PART: (<LETTER>)+ (<NAME_CHAR> (<LETTER>)+)* >
+|  
+  < #LETTER: [
+  		/* Basic Latin */
+  		"a"-"z","A"-"Z",
+  		
+  		/* Latin-1 Supplement */
+  		"\u00C0"-"\u00D6",
+  		"\u00D8"-"\u00F6",
+  		"\u00F8"-"\u00FF"
+  		] >
+|
+  < #NAME_CHAR: ("'" | "-") >
+} 
+
+/* White space */
+
+SKIP :
+{
+  " "
+| "\t"
+| "\n"
+| "\r"
+| "\f"
+}
+
+
+NameList ParseExpression() :
+{
+  NameList nameList = new NameList();
+}
+{
+  (
+    TermExpression(nameList)
+  )?
+  <EOF>
+  {
+    return nameList;
+  }
+}
+  
+  
+void TermExpression() :
+{
+}
+{
+  
+NameList NameListExpression() :
+{
+  NameList nameList = new NameList();
+  Token t;
+}
+{
+  t=<NAME_PART> 
+    { nameList.addNamePart(t.image); }
+    ( t=<NAME_PART>
+      { nameList.addNamePart(t.image); }
+    )*    
+    (   
+      <OR> t=<NAME_PART> 
+        { 
+          nameList.setConjunction(Conjunction.OR);
+          nameList.addFinalName(t.image);
+        }
+    |
+      <AND> t=<NAME_PART>
+        { 
+          nameList.setConjunction(Conjunction.AND);
+          nameList.addFinalName(t.image);
+        }
+    )?
+    
+}
