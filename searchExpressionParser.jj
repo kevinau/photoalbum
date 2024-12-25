@@ -94,6 +94,10 @@ TOKEN :
   		] >
 |
   < #NAME_CHAR: ("'" | "-") >
+|
+  < FINAL_NAME_PART: (<LETTER>)+ (<NAME_CHAR_PLUS> (<LETTER>)+)* >
+|  
+  < #NAME_CHAR_PLUS: ("'" | "-" | " ") >
 } 
 
 /* White space */
@@ -140,13 +144,13 @@ NameList NameListExpression() :
       { nameList.addNamePart(t.image); }
     )*    
     (   
-      <OR> t=<NAME_PART> 
+      <OR> t=<FINAL_NAME_PART> 
         { 
           nameList.setConjunction(Conjunction.OR);
           nameList.addFinalName(t.image);
         }
     |
-      <AND> t=<NAME_PART>
+      <AND> t=<FINAL_NAME_PART>
         { 
           nameList.setConjunction(Conjunction.AND);
           nameList.addFinalName(t.image);

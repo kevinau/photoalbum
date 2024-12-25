@@ -17,7 +17,8 @@ public class ExpressionTest {
       "ashton imogen chloe or harlow",
       "ashton imogen chloe and harlow",
       "andré",
-      "harlow van de kirk",
+      "van de kirk",
+      "harlow imogen van de kirk",
   };
   
   
@@ -33,15 +34,9 @@ public class ExpressionTest {
       NamesExpression nameExpr = parser.parseExpression(expr);
       System.out.println(nameExpr);
       
-      int[] next = new int[1];
-      int index = nameExpr.getNameParts().size();
-      
-      String p = nameList.getTag(nameExpr.getNameParts(), index, next);
-      while (p != null) {
-        System.out.println("./............" + p);
-        System.out.println("./............" + index + ".." + next[0]);
-        index = next[0];
-        p = nameList.getTag(nameExpr.getNameParts(), index, next);
+      List<String> found = nameList.getTags(nameExpr.getNameParts(), nameExpr.getFinalName());
+      for (String p : found) {
+        System.out.println("  Found: " + p);
       }
       System.out.println();
     }

@@ -8,7 +8,7 @@ public class NamesExpression {
   public enum Conjunction { OR, AND };
   
   private final List<String> nameParts = new ArrayList<>();
-  private final List<String> finalName = new ArrayList<>();
+  private String finalName;
   private Conjunction conjunction = Conjunction.OR;
   
   
@@ -17,8 +17,8 @@ public class NamesExpression {
   }
   
   
-  public void addFinalName(String value) {
-    finalName.add(value);
+  public void addFinalName(String finalName) {
+    this.finalName = finalName;
   }
   
   
@@ -27,7 +27,7 @@ public class NamesExpression {
   }
   
   
-  public List<String> getFinalName() {
+  public String getFinalName() {
     return finalName;
   }
   
